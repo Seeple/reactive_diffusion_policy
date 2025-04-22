@@ -48,7 +48,7 @@ env_runner:
   n_obs_steps: ${n_obs_steps}
   obs_temporal_downsample_ratio: ${obs_temporal_downsample_ratio}
   dataset_obs_temporal_downsample_ratio: ${dataset_obs_temporal_downsample_ratio}
-  downsample_extended_obs: ${eval:'${obs_temporal_downsample_ratio}!=${dataset_obs_temporal_downsample_ratio}'}}
+  downsample_extended_obs: ${eval:'${obs_temporal_downsample_ratio}!=${dataset_obs_temporal_downsample_ratio}'}
   task_name: ${task_name}
   transform_params: ${task.transforms}
   shape_meta: *shape_meta
