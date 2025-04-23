@@ -23,7 +23,7 @@ modify [post_process_data.py](post_process_data.py) and [reactive_diffusion_poli
 1. **Implement the Sensor Publisher.**
    Refer to [reactive_diffusion_policy/real_world/publisher/gelsight_camera_publisher.py](../reactive_diffusion_policy/real_world/publisher/gelsight_camera_publisher.py)
    and implement a similar publisher for your sensor.
-   This publisher will publish the image, markers or wrench of the sensor to the ROS topic.
+   This publisher will publish the image, markers or wrench of the sensor to the ROS2 topic. Besides, it will send the 3D deformation field and optional image streams to the TactAR APP in Meta Quest3. You can cutomize your own format of 3D deformation field or camera streaming by changing the config of these sensors.
    > Because Flexiv Rizon 4 is equipped with built-in joint torque sensors, we have implemented the publisher in
      [reactive_diffusion_policy/real_world/publisher/bimanual_robot_publisher.py](../reactive_diffusion_policy/real_world/publisher/bimanual_robot_publisher.py).
      If you want to use a separate force sensor, you can add an individual force sensor publisher.
