@@ -15,6 +15,7 @@ from fastapi import FastAPI, HTTPException
 import scipy.spatial.transform as st
 from loguru import logger
 from typing import Dict
+import open3d as o3d
 from collections import deque
 from reactive_diffusion_policy.common.data_models import (TargetTCPRequest, MoveGripperRequest,         BimanualRobotStates)
 import uvicorn
@@ -44,15 +45,16 @@ class Command(enum.Enum):
 
 class FrankaInterpolationController:
     def __init__(self, 
-                 robot_ip, 
-                 robot_port, 
-                 gripper_ip,
-                 gripper_port,
+                 robot_ip='localhost', 
+                 robot_port='50051', 
+                 gripper_ip='localhost',
+                 gripper_port='50052',
                  host_ip='192.168.2.187', 
                  port=8092, 
                  Kx_scale=1.0,
                  Kxd_scale=1.0,
-                 frequency=1000):
+                 frequency=1000,
+                 debug=True):
         """
         robot_ip: the ip of the middle-layer controller (NUC)
         frequency: 1000 for franka
@@ -68,10 +70,11 @@ class FrankaInterpolationController:
         self.Kx = np.array([750.0, 750.0, 750.0, 15.0, 15.0, 15.0]) * Kx_scale
         self.Kxd = np.array([37.0, 37.0, 37.0, 2.0, 2.0, 2.0]) * Kxd_scale
 
-        self.robot = zerorpc.Client()
-        self.robot.connect(f"tcp://{self.robot_ip}:{self.robot_port}")
-        self.gripper = zerorpc.Client()
-        self.gripper.connect(f"tcp://{gripper_ip}:{gripper_port}")
+        if not self.debug:
+            self.robot = zerorpc.Client()
+            self.robot.connect(f"tcp://{self.robot_ip}:{self.robot_port}")
+            self.gripper = zerorpc.Client()
+            self.gripper.connect(f"tcp://{gripper_ip}:{gripper_port}")
 
         self.app = FastAPI()
         self.setup_routes()
@@ -80,6 +83,8 @@ class FrankaInterpolationController:
 
         self.pose_interp = None
         self.last_waypoint_time = None
+        
+        self.debug = debug
 
     def setup_routes(self):
         @self.app.post('/clear_fault')
@@ -88,7 +93,8 @@ class FrankaInterpolationController:
             Clear any fault in the robot.
             """
             logger.warning("Fault occurred on franka robot server, trying to clear ...")
-            self.robot.clear_fault()
+            if not self.debug:
+                self.robot.clear_fault()
             return {"message": "Fault cleared"}
         
         @self.app.get('/get_current_tcp/{robot_side}')
@@ -98,7 +104,12 @@ class FrankaInterpolationController:
             """
             if robot_side != "left":
                 raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
-            return self.robot.get_current_tcp()
+            if not self.debug:
+                cur_tcp = self.robot.get_current_tcp()
+            else:
+                logger.warning("Debug mode, default TCP pose is returned")
+                cur_tcp = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            return cur_tcp
         
         @self.app.post('/birobot_go_home')
         async def birobot_go_home():
@@ -109,8 +120,12 @@ class FrankaInterpolationController:
             # TODO: check if there is determined homing positions and durations
             home_joint_positions = [0.0, -1.57, 0.0, -1.57, 0.0, 1.57, 0.0]
             homing_duration = 5.0
-            self.robot.move_to_joint_positions(positions=home_joint_positions, 
+            if not self.debug:
+                self.robot.move_to_joint_positions(positions=home_joint_positions, 
                                                time_to_go=homing_duration)
+            else:
+                logger.warning("Debug mode, no robot coonnected")
+                
             return {"message": "Robot moved to home position"}
 
         @self.app.get('/get_current_robot_state')
@@ -118,6 +133,9 @@ class FrankaInterpolationController:
             """
             Get the current state of the robot.
             """
+            if self.debug:
+                logger.warning("Debug mode, default robot state is returned")
+                return BimanualRobotStates()
             state = self.robot.get_robot_state()
             return BimanualRobotStates(**state)
         
@@ -130,7 +148,10 @@ class FrankaInterpolationController:
             """
             if robot_side != "left":
                 raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
-            self.gripper.move_gripper(request.width, request.velocity, request.force_limit)
+            
+            if not self.debug:
+                self.gripper.move_gripper(request.width, request.velocity, request.force_limit)
+                
             return {
                 "message": f"{robot_side.capitalize()} gripper moving to width {request.width} "
                         f"with velocity {request.velocity} and force limit {request.force_limit}"
@@ -143,7 +164,8 @@ class FrankaInterpolationController:
             """
             if robot_side != "left":
                 raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
-            self.gripper.move_gripper_force(request.force_limit)
+            if not self.debug:
+                self.gripper.move_gripper_force(request.force_limit)
             return {
                 "message": f"{robot_side.capitalize()} gripper grasping with force limit {request.force_limit}"
             }
@@ -155,7 +177,8 @@ class FrankaInterpolationController:
             """
             if robot_side != "left":
                 raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
-            self.robot.stop_gripper()
+            if not self.debug:
+                self.gripper.stop_gripper()
             return {"message": f"{robot_side.capitalize()} gripper stopping"}
         
         @self.app.post('/move_tcp/{robot_side}')
@@ -171,7 +194,7 @@ class FrankaInterpolationController:
             
             # TODO: replace the target time offset with actual frequency
             curr_time = time.monotonic()
-            command_duration = 1/20
+            command_duration = 1/50
             target_time = curr_time + command_duration 
             
             self.command_queue.append({
@@ -189,8 +212,11 @@ class FrankaInterpolationController:
         """
         
         if self.pose_interp is None:
-            curr_flange_pose = np.array(self.robot.get_ee_pose())
-            curr_tip_pose = mat_to_pose(pose_to_mat(curr_flange_pose) @ tx_flange_tip)
+            if self.debug:
+                curr_flange_pose = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]) # （x, y, z, rx, ry,rz)
+            else:
+                curr_flange_pose = np.array(self.robot.get_ee_pose())
+            curr_tip_pose = mat_to_pose(pose_to_mat(curr_flange_pose) @ tx_flange_tip) # (x, y, z, qw, qx, qy, qz)
             
             curr_time = time.monotonic()
             self.pose_interp = PoseTrajectoryInterpolator(
@@ -200,11 +226,31 @@ class FrankaInterpolationController:
             self.last_waypoint_time = curr_time
             
         # start franka cartesian impedance policy
-        self.robot.start_cartesian_impedance(
-            Kx=self.Kx.tolist(),
-            Kxd=self.Kxd.tolist()
-        )
-        
+        if (not self.debug):
+            self.robot.start_cartesian_impedance(
+                Kx=self.Kx.tolist(),
+                Kxd=self.Kxd.tolist()
+            )
+            
+        # Open3d Visualization setup
+        if self.debug:
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(window_name="Tip Pose Visualization", width=800, height=600)
+            
+            # Add a coordinate frame at the origin to show the orientation of the end effector
+            coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+            vis.add_geometry(coordinate_frame)
+            
+            # Red sphere to represent the tip position
+            tip_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.02)
+            tip_sphere.paint_uniform_color([1, 0, 0])  
+            vis.add_geometry(tip_sphere)
+            
+            # PointCloud to store the trajectory (last 20 points)
+            trajectory_points = o3d.geometry.PointCloud()
+            vis.add_geometry(trajectory_points)
+            max_trajectory_points = 20
+            
         t_start = time.monotonic()
         iter_idx = 0
                      
@@ -214,7 +260,33 @@ class FrankaInterpolationController:
             # pose interpolation
             tip_pose = self.pose_interp(t_now)
             flange_pose = mat_to_pose(pose_to_mat(tip_pose) @ tx_tip_flange)
-            self.robot.update_desired_ee_pose(flange_pose.tolist())
+            if self.debug:
+                logger.info(f"Interpolated pose: {tip_pose}")
+                logger.info(f"Flange pose: {flange_pose}")
+                
+                # Viusalize the interpolated tip pose
+                tip_position = tip_pose[:3]  # (x, y, z)
+                tip_orientation = st.Rotation.from_quat(tip_pose[3:]).as_matrix() # (3x3 rotation matrix)
+                tip_sphere.translate(tip_position - np.asarray(tip_sphere.get_center()), relative=False)
+
+                # Update coordinate frame position and orientation
+                coordinate_frame.rotate(tip_orientation, center=tip_position)
+                coordinate_frame.translate(tip_position - np.asarray(coordinate_frame.get_center()), relative=False)
+
+                # Update the trajectory points
+                trajectory_points.points.append(tip_position)
+                if len(trajectory_points.points) > max_trajectory_points:
+                    trajectory_points.points.pop(0) 
+
+                trajectory_points.points = o3d.utility.Vector3dVector(trajectory_points.points)
+                vis.update_geometry(tip_sphere)
+                vis.update_geometry(coordinate_frame)
+                vis.update_geometry(trajectory_points)
+                vis.poll_events()
+                vis.update_renderer()
+                                       
+            else:
+                self.robot.update_desired_ee_pose(flange_pose.tolist())
 
             # Process high-level motion generation commands in the queue
             '''
@@ -230,7 +302,7 @@ class FrankaInterpolationController:
                     target_pose = command['target_pose']
                     curr_time = t_now + self.control_cycle_time # d_t means already implement an interpolated step
                     target_time = float(command['target_time'])
-                    # command_duration = 1 / 20
+                    # command_duration = 1 / 50
                     # target_time = curr_time + command_duration
 
                     self.pose_interp = self.pose_interp.schedule_waypoint(
@@ -262,7 +334,8 @@ class FrankaInterpolationController:
         except Exception as e:
             logger.exception(e)
         finally:
-            self.robot.terminate_current_policy()
+            if not self.debug:     
+                self.robot.terminate_current_policy()
             logger.info("Franka Interpolation Controller terminated.")
         
 def main():
