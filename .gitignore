@@ -139,7 +139,7 @@ dmypy.json
 .pyre/
 
 # Virtual environment
-diffusion_policy_venv/
+rdp_venv/
 
 # cpp settings
 .vscode/
