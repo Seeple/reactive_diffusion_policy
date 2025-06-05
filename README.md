@@ -233,10 +233,10 @@ Thanks for their great work!
 ## 🔗 Citation
 If you find our work useful, please consider citing:
 ```
-@article{xue2025reactive,
+@inproceedings{xue2025reactive,
   title     = {Reactive Diffusion Policy: Slow-Fast Visual-Tactile Policy Learning for Contact-Rich Manipulation},
   author    = {Xue, Han and Ren, Jieji and Chen, Wendi and Zhang, Gu and Fang, Yuan and Gu, Guoying and Xu, Huazhe and Lu, Cewu},
-  journal   = {arXiv preprint arXiv:2503.02881},
+  booktitle = {Proceedings of Robotics: Science and Systems (RSS)},
   year      = {2025}
 }
 ```
