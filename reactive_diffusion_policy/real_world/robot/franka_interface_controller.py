@@ -6,6 +6,7 @@ RobotServer part of BimanualFlexivServer
 import zerorpc
 from polymetis import RobotInterface, GripperInterface
 import scipy.spatial.transform as st
+from reactive_diffusion_policy.common.space_utils import pose_6d_to_pose_7d
 import numpy as np
 import torch
 
@@ -25,32 +26,27 @@ class FrankaInterface:
         """
         self.robot.clear_fault()
      
-     
-    # TODO: Check the response format of the following API  
     def get_current_tcp(self):
         """
         Get the current TCP pose of the robot.
         """
-        return self.get_ee_pose()
+        return pose_6d_to_pose_7d(np.asarray(self.get_ee_pose())).tolist() # (7) (x, y, z, qw, qx, qy, qz), flange coordinate
 
     # libfranka Gripper State has no element 'gripper_force'
-    
     def get_robot_state(self):
         """
         Get the current state of the robot.
         """
         robot_state = self.robot.get_robot_state()
         gripper_state = self.gripper.get_state()
-        ee_pose = self.get_ee_pose()
+        ee_pose = self.get_current_tcp()
         joint_positions = self.get_joint_positions()
         joint_velocities = self.get_joint_velocities()
         return {
             "leftRobotTCP": ee_pose, # (7) (x, y, z, qw, qx, qy, qz)
-            # TODO: Obtaib the TCP velocity (6) (vx, vy, vz, wx, wy, wz)
             # "leftRobotTCPVel": joint_velocities, # (6) (vx, vy, vz, wx, wy, wz)
             # TODO: check whether TCP wrench can be obtained from following API
             "leftRobotTCPWrench": robot_state.motor_torques_external.tolist(), # (6) (fx, fy, fz, mx, my, mz)
-            # TODO: Obtaib gripper force
             "leftGripperState": [gripper_state.width, 0] # (2) (width, force)
         }
 
@@ -59,7 +55,7 @@ class FrankaInterface:
         pos = data[0].numpy()
         quat_xyzw = data[1].numpy()
         rot_vec = st.Rotation.from_quat(quat_xyzw).as_rotvec()
-        return np.concatenate([pos, rot_vec]).tolist()
+        return np.concatenate([pos, rot_vec]).tolist() # (6) (x, y, z, rx, ry, rz), flange coordiate
     
     def get_joint_positions(self):
         return self.robot.get_joint_positions().numpy().tolist()

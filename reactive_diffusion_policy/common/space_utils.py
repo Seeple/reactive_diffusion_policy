@@ -2,6 +2,7 @@ import numpy as np
 from typing import Tuple, Union
 import transforms3d as t3d
 from geometry_msgs.msg import Pose
+import scipy.spatial.transform as st
 
 def ros_pose_to_4x4matrix(pose: Pose) -> np.ndarray:
     # Convert ROS Pose message to 4x4 transformation matrix
@@ -130,33 +131,33 @@ def homo_matrix_to_pose_9d_batch(mat: np.ndarray) -> np.ndarray:
     pose[:, 3:9] = mat[:, :3, :2].swapaxes(1, 2).reshape(mat.shape[0], -1)
     return pose
 
-def pos_rot_to_mat(pos, rot):
-    shape = pos.shape[:-1]
-    mat = np.zeros(shape + (4,4), dtype=pos.dtype)
-    mat[...,:3,3] = pos
-    mat[...,:3,:3] = rot.as_matrix()
-    mat[...,3,3] = 1
-    return mat
+# def pos_rot_to_mat(pos, rot):
+#     shape = pos.shape[:-1]
+#     mat = np.zeros(shape + (4,4), dtype=pos.dtype)
+#     mat[...,:3,3] = pos
+#     mat[...,:3,:3] = rot.as_matrix()
+#     mat[...,3,3] = 1
+#     return mat
 
-def mat_to_pos_rot(mat):
-    pos = (mat[...,:3,3].T / mat[...,3,3].T).T
-    rot = st.Rotation.from_matrix(mat[...,:3,:3])
-    return pos, rot
+# def mat_to_pos_rot(mat):
+#     pos = (mat[...,:3,3].T / mat[...,3,3].T).T
+#     rot = st.Rotation.from_matrix(mat[...,:3,:3])
+#     return pos, rot
 
-def pos_rot_to_pose(pos, rot):
-    shape = pos.shape[:-1]
-    pose = np.zeros(shape+(6,), dtype=pos.dtype)
-    pose[...,:3] = pos
-    pose[...,3:] = rot.as_rotvec()
-    return pose
+# def pos_rot_to_pose(pos, rot):
+#     shape = pos.shape[:-1]
+#     pose = np.zeros(shape+(6,), dtype=pos.dtype)
+#     pose[...,:3] = pos
+#     pose[...,3:] = rot.as_rotvec()
+#     return pose
 
-def pose_to_pos_rot(pose):
-    pos = pose[...,:3]
-    rot = st.Rotation.from_rotvec(pose[...,3:])
-    return pos, rot
+# def pose_to_pos_rot(pose):
+#     pos = pose[...,:3]
+#     rot = st.Rotation.from_rotvec(pose[...,3:])
+#     return pos, rot
 
-def pose_to_mat(pose):
-    return pos_rot_to_mat(*pose_to_pos_rot(pose))
+# def pose_to_mat(pose):
+#     return pos_rot_to_mat(*pose_to_pos_rot(pose))
 
-def mat_to_pose(mat):
-    return pos_rot_to_pose(*mat_to_pos_rot(mat))
+# def mat_to_pose(mat):
+#     return pos_rot_to_pose(*mat_to_pos_rot(mat))

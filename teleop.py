@@ -8,7 +8,8 @@ import rclpy
 from reactive_diffusion_policy.real_world.real_world_transforms import RealWorldTransforms
 from reactive_diffusion_policy.real_world.teleoperation.teleop_server import TeleopServer
 from reactive_diffusion_policy.real_world.publisher.bimanual_robot_publisher import BimanualRobotPublisher
-from reactive_diffusion_policy.real_world.robot.bimanual_flexiv_server import BimanualFlexivServer
+# from reactive_diffusion_policy.real_world.robot.bimanual_flexiv_server import BimanualFlexivServer
+from reactive_diffusion_policy.real_world.robot.franka_server import FrankaInterpolationController
 import hydra
 from omegaconf import DictConfig
 from loguru import logger
@@ -48,7 +49,9 @@ def create_robot_publisher_node(cfg: DictConfig, transforms: RealWorldTransforms
 )
 def main(cfg: DictConfig):
     # create robot server
-    robot_server = BimanualFlexivServer(**cfg.task.robot_server)
+    # robot_server = BimanualFlexivServer(**cfg.task.robot_server)
+    robot_server = FrankaInterpolationController(**cfg.task.robot_server)
+    # robot_server = SimFrankaController()
     robot_server_thread = threading.Thread(target=robot_server.run, daemon=True)
     # start the robot server
     robot_server_thread.start()
@@ -62,8 +65,10 @@ def main(cfg: DictConfig):
                                  transforms=transforms,
                                  **cfg.task.teleop_server)
     teleop_process = multiprocessing.Process(target=teleop_server.run)
+    logger.debug("Teleop server Intialized!")
 
     publisher_process = multiprocessing.Process(target=create_robot_publisher_node, args=(cfg, transforms))
+    logger.debug("Bimanual publisher Intialized!")
     try:
         publisher_process.start()
         teleop_process.start()
