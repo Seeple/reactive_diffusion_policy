@@ -1,3 +1,15 @@
+"""
+This module implements trajectory interpolation using design concepts from the 
+Universal Manipulation Interface (UMI)
+
+UMI Reference:
+  Universal Manipulation Interface: In-The-Wild Robot Teaching Without In-The-Wild Robots
+  Chi, Cheng and Xu, Zhenjia and Pan, Chuer and Cousineau, Eric and Burchfiel, Benjamin and Feng, Siyuan and Tedrake, Russ and Song, Shuran
+  Proceedings of Robotics: Science and Systems (RSS), 2024
+  
+Original UMI project: https://github.com/real-stanford/universal_manipulation_interface
+"""
+
 from typing import Union
 import numbers
 import numpy as np
