@@ -48,13 +48,14 @@ class Command(enum.Enum):
 
 class FrankaInterpolationController:
     def __init__(self, 
-                 robot_ip='localhost', 
-                 robot_port='50051', 
-                 gripper_ip='localhost',
-                 gripper_port='50052',
-                 sim_server_ip='192.168.2.187',
+                 robot_ip='10.53.21.79', 
+                 robot_port='4242', 
+                 # TODO: add gripper ip and port
+                 gripper_ip='l0.53.21.79',
+                 gripper_port='4241',
+                 sim_server_ip='10.53.21.87',
                  sim_server_port=5000,
-                 host_ip='192.168.2.187', 
+                 host_ip='10.53.21.87', 
                  port=8092, 
                  Kx_scale=1.0,
                  Kxd_scale=1.0,
@@ -92,6 +93,7 @@ class FrankaInterpolationController:
         
         self.client_mapping = {}
         
+        self.frequency_test = False
         self.frequency_monitor_window = 100 
         self.send_timestamps = deque(maxlen=self.frequency_monitor_window)
         self.last_frequency_log_time = 0
@@ -115,6 +117,7 @@ class FrankaInterpolationController:
                 robot_client.connect(f"tcp://{self.robot_ip}:{self.robot_port}")
                 gripper_client = zerorpc.Client()
                 gripper_client.connect(f"tcp://{self.gripper_ip}:{self.gripper_port}")
+                
                 self.client_mapping[route_identifier] = (robot_client, gripper_client)
                 logger.info(f"Created new client for route: {route_identifier}")
         
@@ -139,7 +142,6 @@ class FrankaInterpolationController:
             Get the current TCP pose of the robot.
             """
             if robot_side != "left":
-                # raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
                 logger.info("Onlt left arm is supported in Franka")
             if not self.debug:
                 robot_client, _ = self.get_client('/get_current_tcp/{robot_side}')
@@ -155,7 +157,7 @@ class FrankaInterpolationController:
             Move the robot to its home position.
             """
             logger.info("Moving robot to home position")
-            # TODO: ontain the home position from the robot
+            # TODO: obtain the home position from the robot
             home_joint_positions = [0.0, -1.57, 0.0, -1.57, 0.0, 1.57, 0.0]
             homing_duration = 5.0
             if not self.debug:
@@ -163,6 +165,7 @@ class FrankaInterpolationController:
                 robot_client.move_to_joint_positions(positions=home_joint_positions, 
                                                time_to_go=homing_duration)
             else:
+                # TODO: obtain the home position from the robot
                 homing_pose = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
                 client = self.get_client('/birobot_go_home')
                 client.update_desired_ee_pose(homing_pose)
@@ -174,9 +177,6 @@ class FrankaInterpolationController:
             """
             Get the current state of the robot.
             """
-            # sim_client = zerorpc.Client()
-            # sim_client.connect(f"tcp://{self.sim_server_ip}:{self.sim_server_port}")
-            # logger.info(f"Connected to Sim Server at {self.sim_server_ip}:{self.sim_server_port}")
             if self.debug:
                 client = self.get_client('/get_current_robot_states')
                 state = client.get_robot_state()
@@ -193,7 +193,6 @@ class FrankaInterpolationController:
             Move the gripper to a target width with specified velocity and force limit.
             """
             if robot_side != "left":
-                # raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
                 logger.info("Onlt left arm is supported in Franka")
             
             if not self.debug:
@@ -214,7 +213,6 @@ class FrankaInterpolationController:
             Close the gripper with a specified force limit.
             """
             if robot_side != "left":
-                # raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
                 logger.info("Onlt left arm is supported in Franka")
             if not self.debug:
                 _, gripper_client = self.get_client('/move_gripper_force/{robot_side}')
@@ -232,7 +230,6 @@ class FrankaInterpolationController:
             Stop the gripper's current motion.
             """
             if robot_side != "left":
-                # raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
                 logger.info("Only left arm is supported in Franka")
             if not self.debug:
                 _, gripper_client = self.get_client('/stop_gripper/{robot_side}')
@@ -249,15 +246,13 @@ class FrankaInterpolationController:
             '''
             logger.info("New TCP message captured by franka server!")
             if robot_side != "left":
-                # raise HTTPException(status_code=400, detail="Only 'left' robot is supported")
                 logger.info("Onlt left arm is supported in Franka")
             
             target_7d_pose = np.array(request.target_tcp)
             target_pose = pose_7d_to_pose_6d(target_7d_pose) # (x, y, z, rx, ry, rz)
             
-            # TODO: replace the target time offset with actual frequency
             curr_time = time.monotonic()
-            command_duration = 1/90 # frequnency for high-level motion generation
+            command_duration = 1/90  # frequnency for high-level motion generation
             target_time = curr_time + command_duration 
             
             self.command_queue.append({
@@ -276,7 +271,7 @@ class FrankaInterpolationController:
         """
         # realtime_client = zerorpc.Client()
         # realtime_client.connect(f"tcp://{self.sim_server_ip}:{self.sim_server_port}")
-        # logger.info(f"Connected to Sim Server at {self.sim_server_ip}:{self.sim_server_port}")
+
         if self.debug:
             realtime_client = self.get_client('/process_commands')
         else:
@@ -308,35 +303,34 @@ class FrankaInterpolationController:
         iter_idx = 0
                      
         while True:
-            loop_start = time.monotonic()
             t_now = time.monotonic()
             
-            self.send_timestamps.append(t_now)
-            
-            # command frequency test
-            if len(self.send_timestamps) >= 2:
-                current_time = time.monotonic()
-                if current_time - self.last_frequency_log_time >= self.frequency_log_interval:
-                    time_diff = self.send_timestamps[-1] - self.send_timestamps[0]
-                    avg_frequency = (len(self.send_timestamps) - 1) / time_diff
-                    
-                    # compute jitter in command_window (ms)
-                    if len(self.send_timestamps) >= 3:
-                        intervals = np.diff(list(self.send_timestamps))
-                        jitter = np.std(intervals) * 1000  
-                    else:
-                        jitter = 0
-                    
-                    logger.info(f"Control frequency: {avg_frequency:.2f} Hz (target: {self.frequency} Hz)")
-                    logger.info(f"Timing jitter: {jitter:.3f} ms")
-                    
-                    if abs(avg_frequency - self.frequency) > self.frequency * 0.1:  
-                        logger.warning(f"Control frequency deviation too large: {abs(avg_frequency - self.frequency):.2f} Hz")
-                    
-                    self.last_frequency_log_time = current_time
-            
+            if self.frequency_test:
+                self.send_timestamps.append(t_now)
+                
+                # command frequency test
+                if len(self.send_timestamps) >= 2:
+                    current_time = time.monotonic()
+                    if current_time - self.last_frequency_log_time >= self.frequency_log_interval:
+                        time_diff = self.send_timestamps[-1] - self.send_timestamps[0]
+                        avg_frequency = (len(self.send_timestamps) - 1) / time_diff
+                        
+                        # compute jitter in command_window (ms)
+                        if len(self.send_timestamps) >= 3:
+                            intervals = np.diff(list(self.send_timestamps))
+                            jitter = np.std(intervals) * 1000  
+                        else:
+                            jitter = 0
+                        
+                        logger.info(f"Control frequency: {avg_frequency:.2f} Hz (target: {self.frequency} Hz)")
+                        logger.info(f"Timing jitter: {jitter:.3f} ms")
+                        
+                        if abs(avg_frequency - self.frequency) > self.frequency * 0.1:  
+                            logger.warning(f"Control frequency deviation too large: {abs(avg_frequency - self.frequency):.2f} Hz")
+                        
+                        self.last_frequency_log_time = current_time
+                
             # pose interpolation
-            # TODO: No change in tip_pose here
             tip_pose = self.pose_interp(t_now) # (x, y, z, rx, ry, rz)
             flange_pose = matrix4x4_to_pose_6d(pose_6d_to_4x4matrix(tip_pose) @ tx_tip_flange)
             if self.debug:

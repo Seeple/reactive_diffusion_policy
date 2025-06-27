@@ -31,8 +31,7 @@ class FrankaInterface:
         Get the current TCP pose of the robot.
         """
         return pose_6d_to_pose_7d(np.asarray(self.get_ee_pose())).tolist() # (7) (x, y, z, qw, qx, qy, qz), flange coordinate
-
-    # libfranka Gripper State has no element 'gripper_force'
+    
     def get_robot_state(self):
         """
         Get the current state of the robot.
@@ -45,10 +44,9 @@ class FrankaInterface:
         return {
             "leftRobotTCP": ee_pose, # (7) (x, y, z, qw, qx, qy, qz)
             # "leftRobotTCPVel": joint_velocities, # (6) (vx, vy, vz, wx, wy, wz)
-            # TODO: check whether TCP wrench can be obtained from following API
             "leftRobotTCPWrench": robot_state.motor_torques_external.tolist(), # (6) (fx, fy, fz, mx, my, mz)
-            "leftGripperState": [gripper_state.width, 0] # (2) (width, force)
-        }
+            "leftGripperState": [gripper_state.width, 0] # (2) (width, force), libfranka Gripper State has no element 'gripper_force'
+        }, 
 
     def get_ee_pose(self):
         data = self.robot.get_ee_pose()
@@ -75,7 +73,7 @@ class FrankaInterface:
             Kxd=torch.Tensor(Kxd)
         )
 
-    def update_desired_ee_pose(self, pose):
+    def update_desired_ee_pose(self, pose): # pose: (7) (x, y, z, qw, qx, qy, qz), in flange coordinate
         pose = np.asarray(pose)
         self.robot.update_desired_ee_pose(
             position=torch.Tensor(pose[:3]),
@@ -103,6 +101,7 @@ class FrankaInterface:
     def terminate_current_policy(self):
         self.robot.terminate_current_policy()
 
+# TODO: blocking call, keep the server running
 s = zerorpc.Server(FrankaInterface())
 s.bind("tcp://0.0.0.0:4242")
 s.run()
