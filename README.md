@@ -7,7 +7,9 @@
 <h4 align="center">
     RSS 2025
 </h4>
-
+<h4 align="center">
+    Best Student Paper Award Finalist
+</h4>
 <p align="center">
     <a href="https://hanxue.me">Han Xue</a><sup>1*</sup>,
     Jieji Ren<sup>1*</sup>,
