@@ -3,6 +3,7 @@ This script is the client scipt to test the whole Network connection
 between the Franka hardware, the NUC and the Desktop.
 '''
 
+from polymetis import RobotInterface, GripperInterface
 import sys
 import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -28,42 +29,27 @@ class Command(enum.Enum):
 class FrankaInterpolationController:
     def __init__(self, 
                  robot_ip='192.168.2.216', 
-                 robot_port='4242', 
+                 # TODO: test the connection with end-effector gripper
                  gripper_ip='192.168.2.216',
-                 gripper_port='4241',
-                 host_ip='192.168.2.240', 
-                 port=8092, 
-                 Kx_scale=1.0,
-                 Kxd_scale=1.0,
                  frequency=1000):
         """
         robot_ip: the ip of the middle-layer controller (NUC)
         frequency: 1000 for franka
         """
         self.robot_ip = robot_ip
-        self.robot_port = robot_port
         
         self.gripper_ip = gripper_ip
-        self.gripper_port = gripper_port
-        
-        self.host_ip = host_ip
-        self.port = port
         
         self.frequency = frequency
         self.control_cycle_time = 1.0 / self.frequency
-        
-        self.pose_queue = deque(maxlen=256) # To store the interpolated tip poses
-        
-        self.robot_client = zerorpc.Client()
-        print(f"Connecting to robot at {self.robot_ip}:{self.robot_port}....")
-        self.robot_client.connect(f"tcp://{self.robot_ip}:{self.robot_port}")
-        print(f"Successfully connect to robot server {self.robot_ip}:{self.robot_port}....")
+
+        self.robot = RobotInterface(ip_address=self.robot_ip)
+        self.gripper = GripperInterface(ip_address=self.gripper_ip)
         
         # initialize interpolator related varibales
         self.command_queue = deque(maxlen=256)
         self.pose_interp = None
         self.last_waypoint_time = None
-        self.should_stop = False
         
     def get_joint_positions(self):
         """
@@ -97,19 +83,9 @@ class FrankaInterpolationController:
         Move the robot to the home position.
         '''
         try:
-            self.robot_client.go_home()
+            self.robot.go_home()
         except Exception as e:
             print("Error moving to home position:", e)
-            
-    def stop_client(self):
-        """
-        Stop the client connection.
-        """
-        try:
-            self.robot_client.close()
-            print("Client connection closed.")
-        except Exception as e:
-            print("Error closing client:", e)
             
     def basic_test(self):
         """
@@ -142,101 +118,92 @@ class FrankaInterpolationController:
         '''
         Main loop to process commands from the queue and interpolate poses.
         '''   
+        
         # initialize the pose interpolator
         if self.pose_interp is None:
-            try:
-                # curr_flange_pose = np.array(self.get_ee_pose())
-                curr_flange_pose = np.array([0.5, 0.0, 0.5, 0.5, 0.5, 0.5])  # (6) (x, y, z, rx, ry, rz), in flange coordinate
-                curr_time = time.monotonic()
-                self.pose_interp = PoseTrajectoryInterpolator(
-                    times=[curr_time],
-                    poses=[curr_flange_pose]
-                )
-                self.last_waypoint_time = curr_time
-            except Exception as e:
-                logger.error(f"Failed to initialize interpolator: {e}")
-                return
+            # curr_flange_pose = np.array(self.get_ee_pose())
+            curr_flange_pose = np.array([0.5, 0.0, 0.5, 0.5, 0.5, 0.5])
+            curr_time = time.monotonic()
+            self.pose_interp = PoseTrajectoryInterpolator(
+                times=[curr_time],
+                poses=[curr_flange_pose]
+            )
+            self.last_waypoint_time = curr_time
             
         # main loop to process commands
         t_start = time.monotonic()
         iter_idx = 0
         
-        while not self.should_stop:
-            try:
-                t_now = time.monotonic()
-                
-                # obtain the interpolated tip pose at the current time
-                flange_pose = self.pose_interp(t_now)
-                self.pose_queue.append(flange_pose.tolist())  # store the interpolated pose
-
-                # process new target poses in the command queue
-                try:
-                    command = self.command_queue.popleft()
-                    if command['cmd'] == Command.SCHEDULE_WAYPOINT.value: # schedule a new waypoint
-                        target_pose = command['target_pose']
-                        curr_time = t_now + self.control_cycle_time
-                        target_time = command['target_time']
-
-                        self.pose_interp = self.pose_interp.schedule_waypoint(
-                            pose=target_pose,
-                            time=target_time,
-                            curr_time=curr_time,
-                            last_waypoint_time=self.last_waypoint_time
-                        )
-                        self.last_waypoint_time = target_time
-                        logger.info(f"New waypoint scheduled at {target_time}: {target_pose}")
-                except IndexError:
-                    pass
+        while True:
+            t_now = time.monotonic()
             
-                # control frequency of the control command
-                t_wait_util = t_start + (iter_idx + 1) * self.control_cycle_time
-                precise_wait(t_wait_util, time_func=time.monotonic)
-                iter_idx += 1
-                
-            except Exception as e:
-                logger.error(f"Error in process_commands: {e}")
-                break
-    
-    # run zerorpc client in the main thread        
-    def send_poses(self):
-        last_print_time = time.time()
-        pose_counter = 0
-        
-        while not self.should_stop:
+            # obtain the interpolated tip pose at the current time
+            flange_pose = self.pose_interp(t_now)
+            self.robot_client.update_desired_ee_pose(flange_pose.tolist())
+
+            # process new target poses in the command queue
             try:
-                if len(self.pose_queue) > 0:
-                    pose = self.pose_queue.popleft()
-                    self.robot_client.update_desired_ee_pose(pose)
-                    pose_counter += 1
-                    
-                    current_time = time.time()
-                    if current_time - last_print_time >= 1.0:
-                        logger.info(f"Sent {pose_counter} poses in the last second")
-                        logger.info(f"Current pose: {pose}")
-                        pose_counter = 0
-                        last_print_time = current_time
-                        
-            except Exception as e:
-                logger.error(f"Error sending pose: {e}")
-            # time.sleep(0.0005)
+                command = self.command_queue.popleft()
+                if command['cmd'] == Command.SCHEDULE_WAYPOINT.value: # schedule a new waypoint
+                    target_pose = command['target_pose']
+                    curr_time = t_now + self.control_cycle_time
+                    target_time = command['target_time']
+
+                    self.pose_interp = self.pose_interp.schedule_waypoint(
+                        pose=target_pose,
+                        time=target_time,
+                        curr_time=curr_time,
+                        last_waypoint_time=self.last_waypoint_time
+                    )
+                    self.last_waypoint_time = target_time
+                    logger.info(f"New waypoint scheduled at {target_time}: {target_pose}")
+            except IndexError:
+                pass
+            
+            # control frequency of the control command
+            t_wait_util = t_start + (iter_idx + 1) * self.control_cycle_time
+            precise_wait(t_wait_util, time_func=time.monotonic)
+            iter_idx += 1
             
     def generate_test_trajectory(self):
         '''
         Generate a simple traejctory to test functionality.
         '''
         curr_pose = np.array(self.get_ee_pose()) 
-        print(f"Current EE Pose in generate_test_trajectory: {curr_pose}")
-        duration = 10.0
+        print("Current End-Effector Pose from generate_test_trajectory:", curr_pose)
+        # curr_pose = np.array([0.5, 0.0, 0.5, 0.5, 0.5, 0.5]) 
+        duration = 20.0
         num_points = 50
         
-        # transition
+        # transation
+        trans_points = 25
         curr_time = time.monotonic()
-        for i in range(num_points):
+        
+        for i in range(trans_points):
             target_pose = curr_pose.copy()
-            dx = 0.2 * np.sin(2 * np.pi * i / num_points)
+            # increment x position for a simple linear trajectory
+            dx = (i + 1) * 0.2 / trans_points
             target_pose[0] = curr_pose[0] + dx
             
-            target_time = curr_time + (i + 1) * duration / num_points
+            target_time = curr_time + (i + 1) * duration / (2 * num_points)
+            
+            self.command_queue.append({
+                'cmd': Command.SCHEDULE_WAYPOINT.value,
+                'target_pose': target_pose,
+                'target_time': target_time
+            })
+            
+        # rotation
+        last_pose = curr_pose.copy()
+        last_pose[0] = curr_pose[0] + 0.2
+        
+        for i in range(trans_points):
+            target_pose = last_pose.copy()
+            # rotate around the z-axis for 2-pi
+            angle = (i + 1) * 2 * np.pi / trans_points
+            target_pose[5] = last_pose[5] + angle
+            
+            target_time = curr_time + (i + 1 + trans_points) * duration / num_points
             
             self.command_queue.append({
                 'cmd': Command.SCHEDULE_WAYPOINT.value,
@@ -256,6 +223,8 @@ class FrankaInterpolationController:
             print("Robot moved to home position.")
             positions = self.get_joint_positions()
             print("Current Joint Positions:", positions)
+            original_ee_pose = self.get_ee_pose()
+            print("Original End-Effector Pose:", original_ee_pose)
             
             # start impedence control
             print("Starting impedance control....")
@@ -268,11 +237,20 @@ class FrankaInterpolationController:
             logger.info(f"Generated {len(self.command_queue)} waypoints")
             
             print("Starting interpolation control thread...")
-            interpolation_thread = threading.Thread(target=self.process_commands, daemon=True)
-            interpolation_thread.start()
+            # control_thread = threading.Thread(target=self.process_commands, daemon=True)
+            # control_thread.start()
+            self.process_commands()
             
-            print("Starting pose sending in main thread...")
-            self.send_poses()
+            # wait for the trajectory to be processed
+            print("Executing trajectory...")
+            trajectory_duration = 21.0  
+            for i in range(int(trajectory_duration)):
+                print(f"Trajectory execution: {i}/{int(trajectory_duration)} seconds")
+                time.sleep(1)
+                
+            # get the final tcp poses
+            final_pose = self.get_ee_pose()
+            print("Final End-Effector Pose:", final_pose)
                 
         except Exception as e:
             print(f"Test failed with error: {e}")
@@ -281,8 +259,32 @@ class FrankaInterpolationController:
             print("Process finished, stopping the robot client...")
             self.robot_client.close()
             print("Test completed.")
+            
+    def test_loop(self):
+        try:
+            print("Generating test trajectory...")
+            self.generate_test_trajectory()
+            logger.info(f"Generated {len(self.command_queue)} waypoints")
+            
+            print("Starting interpolation control thread...")
+            control_thread = threading.Thread(target=self.process_commands, daemon=True)
+            control_thread.start()
+            
+            print("Executing trajectory...")
+            trajectory_duration = 21.0  
+            for i in range(int(trajectory_duration)):
+                print(f"Trajectory execution: {i+1}/{int(trajectory_duration)} seconds")
+                time.sleep(1)
+                
+        except Exception as e:
+            print(f"Test failed with error: {e}")
+            logger.exception(e)
+        finally:
+            print("Process finished, stopping the robot client...")
         
 if __name__ == "__main__":
     controller = FrankaInterpolationController()
+    
     # controller.basic_test()
     controller.run_trajectory_test()
+    # controller.test_loop()
