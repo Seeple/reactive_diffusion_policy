@@ -268,7 +268,7 @@ class VAE:
                 extented_obs = extended_obs_dict[extented_obs_key]
             if extend_obs_pad_after_n is not None:
                 padding_obs = extended_obs_dict[extented_obs_key][..., -1:, :].repeat(1, extend_obs_pad_after_n, 1)
-                extented_obs = torch.cat([padding_obs, extented_obs], dim=-2)
+                extented_obs = torch.cat([extented_obs, padding_obs], dim=-2)
             extented_obs = self.normalizer[extented_obs_key].normalize(extented_obs)
             temporal_cond.append(extented_obs)
         temporal_cond = torch.cat(temporal_cond, dim=-1)
