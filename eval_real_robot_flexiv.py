@@ -64,7 +64,6 @@ def main(cfg):
 
         # set inference params
         policy.num_inference_steps = 8  # DDIM inference iterations
-        policy.n_action_steps = policy.horizon - policy.n_obs_steps + 1 # not used in latent diffusion
     else:
         raise NotImplementedError
 
