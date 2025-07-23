@@ -171,6 +171,7 @@ After postprocessing, you may see the following structure:
  ├── target (25710, 4) float32
  └── timestamp (25710,) float32
 ```
+You can also use your own data collection system to collect data and convert it to the same `zarr` format as ours.
 
 ## 📚 Training
 1. **Task Configuration.**
