@@ -6,7 +6,7 @@ In this directory (./reactive_diffusion_policy/real_world/publisher/marker_track
 
 While our precompiled find_marker.so suffices for most scenarios, we provide the source code here to accommodate platform-specific compilation requirements and enable user customization.
 
-## Requirement
+## Requirements
 
 * opencv
 * pybind11
@@ -16,7 +16,7 @@ While our precompiled find_marker.so suffices for most scenarios, we provide the
 pip3 install pybind11 numpy opencv-python
 ```
 
-## Make
+## Build from source
 
 Enter the current directory
 
