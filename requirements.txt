@@ -45,8 +45,6 @@ open3d
 transforms3d
 pyinstrument
 py_cli_interaction
-# trick to force reinstall imagecodecs via pip
-imagecodecs==2022.8.8
 pygame
 # install this by yourself
 # torch==1.13.1
