@@ -38,7 +38,7 @@ env_runner:
   tcp_pos_clip_range: # no clip for x, y, clip for z
     - [ -100, -100, 0.13 ]
     - [ 100, 100, 1.0 ]
-  tcp_rot_clip_range: # no clip
+  tcp_rot_clip_range:
     - [ -3.14159, 0.0, 3.14159 ]
     - [ -3.14159, 0.0, 3.14159 ]
   latency_step: 0
@@ -113,7 +113,7 @@ dataset:
   shape_meta: *shape_meta
   dataset_path: ${task.dataset_path}
   horizon: ${horizon}
-  pad_before: ${eval:'${n_obs_steps}-1+${n_latency_steps}'}
+  pad_before: ${eval:'${dataset_obs_steps}-1+${n_latency_steps}'}
   pad_after: ${eval:'${n_action_steps}-1'}
   n_obs_steps: ${dataset_obs_steps}
   obs_temporal_downsample_ratio: ${dataset_obs_temporal_downsample_ratio}

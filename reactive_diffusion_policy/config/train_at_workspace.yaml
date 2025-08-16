@@ -12,10 +12,10 @@ exp_name: "default"
 
 horizon: ${at.horizon}
 n_obs_steps: ${at.n_obs_steps}
-n_action_steps: 8
 n_latency_steps: 0
 dataset_obs_steps: ${eval:'${n_obs_steps}*${at.dataset_obs_temporal_downsample_ratio}'} # for latent diffusion policy with 24fps
 dataset_obs_temporal_downsample_ratio: ${at.dataset_obs_temporal_downsample_ratio}
+n_action_steps: ${eval:'${horizon}-${dataset_obs_steps}+1'}
 
 policy:
   _target_: reactive_diffusion_policy.model.vae.model.VAE

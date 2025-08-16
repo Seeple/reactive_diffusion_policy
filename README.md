@@ -7,7 +7,9 @@
 <h4 align="center">
     RSS 2025
 </h4>
-
+<h4 align="center">
+    Best Student Paper Award Finalist
+</h4>
 <p align="center">
     <a href="https://hanxue.me">Han Xue</a><sup>1*</sup>,
     Jieji Ren<sup>1*</sup>,
@@ -51,7 +53,7 @@
 - [x] Release the [checkpoints](https://huggingface.co/WendiChen/reactive_diffusion_policy_model).
 - [x] Add [guide for customized tasks, tactile / force sensors and robots](docs/customized_deployment_guide.md).
 - [x] Add [guide for creating the tactile dataset and the tactile embedding](docs/tactile_embedding_guide.md).
-- [ ] Support more robots (e.g. Franka) (ETA: May 2025).
+- [ ] Support more robots (e.g. Franka) (ETA: July 2025).
 
 ## ⚙️ Environment Setup
 ### 📝 Use Customized Tactile / Force Sensors, Robots and Customized Tasks
@@ -169,6 +171,7 @@ After postprocessing, you may see the following structure:
  ├── target (25710, 4) float32
  └── timestamp (25710,) float32
 ```
+You can also use your own data collection system to collect data and convert it to the same `zarr` format as ours.
 
 ## 📚 Training
 1. **Task Configuration.**
@@ -233,10 +236,10 @@ Thanks for their great work!
 ## 🔗 Citation
 If you find our work useful, please consider citing:
 ```
-@article{xue2025reactive,
+@inproceedings{xue2025reactive,
   title     = {Reactive Diffusion Policy: Slow-Fast Visual-Tactile Policy Learning for Contact-Rich Manipulation},
   author    = {Xue, Han and Ren, Jieji and Chen, Wendi and Zhang, Gu and Fang, Yuan and Gu, Guoying and Xu, Huazhe and Lu, Cewu},
-  journal   = {arXiv preprint arXiv:2503.02881},
+  booktitle = {Proceedings of Robotics: Science and Systems (RSS)},
   year      = {2025}
 }
 ```

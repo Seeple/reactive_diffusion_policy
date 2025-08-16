@@ -164,9 +164,7 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
         To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio
         # get action
         start = To - 1
-        # hack
-        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1
-        end = start + n_action_steps
+        end = start + self.n_action_steps
         action = action_pred[:, start:end]
 
         result = {
@@ -198,9 +196,9 @@ class LatentDiffusionUnetImagePolicy(DiffusionUnetImagePolicy):
 
         # hack: align with the training process
         To = self.n_obs_steps * dataset_obs_temporal_downsample_ratio
+        # get action
         start = To - 1
-        n_action_steps = self.original_horizon - self.n_obs_steps * dataset_obs_temporal_downsample_ratio + 1
-        end = start + n_action_steps
+        end = start + self.n_action_steps
         action = action_pred[:, start:end]
 
         result = {
