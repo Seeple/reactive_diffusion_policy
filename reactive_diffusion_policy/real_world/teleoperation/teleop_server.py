@@ -10,6 +10,7 @@ import transforms3d as t3d
 from loguru import logger
 from omegaconf import DictConfig
 from collections import deque
+from typing import Deque
 
 from reactive_diffusion_policy.common.ring_buffer import RingBuffer
 from reactive_diffusion_policy.common.precise_sleep import precise_sleep
@@ -47,6 +48,7 @@ class TeleopServer:
                  max_gripper_width: float = 0.1,
                  min_gripper_width: float=0.01,
                  grasp_force: float=5.0,
+                 gripper_velocity: float = 10.0,
                  gripper_control_time_interval:int = 60,
                  gripper_control_width_precision=0.02,
                  gripper_never_open: bool = False,
@@ -70,6 +72,7 @@ class TeleopServer:
         self.max_gripper_width = max_gripper_width
         self.min_gripper_width = min_gripper_width
         self.grasp_force = grasp_force
+        self.gripper_velocity = gripper_velocity
         self.gripper_control_time_interval = gripper_control_time_interval
         self.gripper_control_width_precision = gripper_control_width_precision
         self.gripper_never_open = gripper_never_open
@@ -89,7 +92,7 @@ class TeleopServer:
         self.app = FastAPI()
         self.setup_routes()
 
-    def is_gripper_stable_open(self, gripper_width_history: deque[float], current_force: float) -> bool:
+    def is_gripper_stable_open(self, gripper_width_history: Deque[float], current_force: float) -> bool:
         if current_force >= self.grasp_force_vis_open_threshold:
             return False
         if len(gripper_width_history) < 30:
@@ -97,7 +100,7 @@ class TeleopServer:
         width_variation = max(gripper_width_history) - min(gripper_width_history)
         return width_variation < self.gripper_width_vis_precision
 
-    def is_gripper_stable_closed(self, gripper_width_history: deque[float], current_force: float) -> bool:
+    def is_gripper_stable_closed(self, gripper_width_history: Deque[float], current_force: float) -> bool:
         # logger.debug(f"current force: {current_force}, gripper width history: {gripper_width_history}")
         if current_force < self.grasp_force_vis_close_threshold:
             return False
@@ -270,7 +273,7 @@ class TeleopServer:
                                      f"with force {grasp_force}")
                         self.send_command('/move_gripper_force/right', {
                             'force_limit': grasp_force,
-                            'velocity': 10.0,
+                            'velocity': self.gripper_velocity,
                         })
                     else:
                         if self.gripper_never_open and right_current_width < right_gripper_width_target:
@@ -280,7 +283,7 @@ class TeleopServer:
                             logger.debug(f"right gripper moving from {right_current_width} to target: {right_gripper_width_target}")
                             self.send_command('/move_gripper/right', {
                                 'width': right_gripper_width_target,
-                                'velocity': 10.0,
+                                'velocity': self.gripper_velocity,
                                 'force_limit': grasp_force
                             })
                     self.last_gripper_width_target[1] = right_gripper_width_target
