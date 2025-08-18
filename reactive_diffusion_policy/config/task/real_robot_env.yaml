@@ -1,3 +1,4 @@
+robot_name: 'flexiv_rizon'
 robot_server:
   host_ip: "192.168.2.187"
   port: 8092
@@ -25,6 +26,7 @@ teleop_server:
   grasp_force: 7.0
   gripper_control_time_interval: 30  # 30 for Flexiv Gripper, 20 for PGC-50 gripper
   gripper_control_width_precision: 0.01  # 0.01 for PGC-50 gripper, 0.01 for Flexiv Grav Gripper
+  bimanual_teleop: True
 device_mapping_server:
   host_ip: '127.0.0.1'
   port: 8062

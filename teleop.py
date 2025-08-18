@@ -49,9 +49,13 @@ def create_robot_publisher_node(cfg: DictConfig, transforms: RealWorldTransforms
 )
 def main(cfg: DictConfig):
     # create robot server
-    # TODO: modify config to use FrankaServer or BimanualFlexivServer
-    # robot_server = BimanualFlexivServer(**cfg.task.robot_server)
-    robot_server = FrankaServer(**cfg.task.robot_server)
+    robot_name = cfg.task.robot_server.get("robot_name", "flexiv-rizon")
+    if robot_name == "flexiv-rizon":
+        robot_server = BimanualFlexivServer(**cfg.task.robot_server)
+    elif robot_name == "franka":
+        robot_server = FrankaServer(**cfg.task.robot_server)
+    else:
+        raise ValueError(f"Unknown robot name: {robot_name}")
     robot_server_thread = threading.Thread(target=robot_server.run, daemon=True)
     # start the robot server
     robot_server_thread.start()
