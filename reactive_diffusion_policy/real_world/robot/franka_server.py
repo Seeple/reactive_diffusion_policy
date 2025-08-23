@@ -3,7 +3,6 @@ Franka Interface Client and Interpolator:
 Recieve commands from teleoperation server,
 Interpolate the moving trajectory,
 and Send commands to Franka through directly using Franka Control Interface (FCI).
-Expose the base controller through FASTAPI.
 '''
 
 import threading
@@ -24,7 +23,7 @@ from polymetis import RobotInterface, GripperInterface
 
 from reactive_diffusion_policy.common.data_models import (TargetTCPRequest, MoveGripperRequest, BimanualRobotStates)
 from reactive_diffusion_policy.common.pose_trajectory_interpolator import PoseTrajectoryInterpolator
-from reactive_diffusion_policy.common.precise_sleep import precise_sleep, precise_wait
+from reactive_diffusion_policy.common.precise_sleep import precise_wait
 
 class Command(enum.Enum):
     STOP = 0
@@ -34,40 +33,38 @@ class Command(enum.Enum):
 
 class FrankaServer:
     def __init__(self, 
-                 # TODO: Replace with the actual IP address of the robot and gripper
-                 robot_ip='0.0.0.0', 
+                 robot_ip='172.16.1.1', 
                  robot_port=50051, 
+                 gripper_ip='172.16.1.1',
                  gripper_port=50052,
-                 host_ip='0.0.0.0', 
-                 port=8092, 
-                 sim_server_ip='0.0.0.0',
-                 sim_server_port=5000,
+                 host_ip='192.168.110.111', 
+                 port=8092,
                  Kx_scale=1.0,
                  Kxd_scale=1.0,
-                 frequency=1000):
+                 vr_frequency=60,
+                 frequency=300):
         """
-        robot ip: ip address of NUC or the Robot simulation server
-        host_ip: ip address which runs the FastAPI server
-        sim_ip: ip address of the simulator, used for testing
-        robot_ip: the ip of the middle-layer controller (NUC)
-        frequency: 1000 for franka
+        robot_ip: ip address of Desktop directly connected to Franka Emika
+        gripper_ip: ip address of Desktop directly connected to Franka Emika
+        host_ip: ip address of the Desktop running the FastAPI server
+        frequency: frequency of control command sent to the robot
+        vr_frequency: frequency of command from teleop server
         Kx_scale: the scale of position gains
         Kxd: the scale of velocity gains.
         """
         self.robot_ip = robot_ip
         self.robot_port = robot_port
+        self.gripper_ip = gripper_ip
         self.gripper_port = gripper_port
-        self.host_ip = host_ip
-        self.sim_server_ip = sim_server_ip
-        self.sim_server_port = sim_server_port
+        self.host_ip = host_ip    
         self.port = port
-        self.frequency = frequency
-        self.control_cycle_time = 1.0 / self.frequency
+        self.vr_frequency = vr_frequency
+        self.control_frequency = frequency
+        self.control_cycle_time = 1.0 / self.control_frequency
 
         # Initialize the robot and gripper interfaces
-        self.robot = RobotInterface(ip_address=self.robot_ip)
-        # self.robot = RobotInterface(ip_address=self.robot_ip, port=self.robot_port)
-        # self.gripper = GripperInterface(ip_address=self.robot_ip, port=self.gripper_port)
+        self.robot = RobotInterface(ip_address=self.robot_ip, port=self.robot_port)
+        self.gripper = GripperInterface(ip_address=self.gripper_ip, port=self.gripper_port)
         
         self.Kx = np.array([750.0, 750.0, 750.0, 15.0, 15.0, 15.0]) * Kx_scale
         self.Kxd = np.array([37.0, 37.0, 37.0, 2.0, 2.0, 2.0]) * Kxd_scale
@@ -78,22 +75,16 @@ class FrankaServer:
         
         self.app = FastAPI()
         self.setup_routes()
-        
-        # TODO: check whether we need to initialize different RobotInterface for each request
-        # self.client_mapping = {}
-
 
     def setup_routes(self):
         @self.app.post('/clear_fault')
         async def clear_fault():
             """
             Clear any fault in the robot.
+            Polymetis RobotInterface has no method to clear fault, so we use a workaround.
             """
-            logger.warning("Fault occurred on franka robot server, trying to clear ...")
-            try:
-                self.robot.clear_fault()
-            except Exception as e:
-                logger.error(f"Failed to clear fault: {e}")
+            logger.warning("Fault occurred on franka robot server")
+            logger.info("Please clear the fault manually on the robot controller.")
             return {"message": "Fault cleared"}
 
         @self.app.get('/get_current_tcp/{robot_side}')
@@ -107,7 +98,6 @@ class FrankaServer:
                 logger.info("Only left arm is supported")
             try:
                 cur_tcp = self.get_current_tcp()
-                # logger.info(f"Current TCP: {cur_tcp}")
             except Exception as e:
                 logger.error(f"Failed to get current TCP: {e}")
                 raise HTTPException(status_code=500, detail="Failed to get current TCP")
@@ -126,8 +116,7 @@ class FrankaServer:
                 raise HTTPException(status_code=500, detail="Failed to get robot state")
             return BimanualRobotStates(**state)
 
-        # Franka gripper command is non-realtime and low-frequency
-        # Thus don't need to interpolate the gripper command 
+        # Franka gripper command is non-realtime and low-frequency, thus there's no need to interpolate the gripper command 
         @self.app.post('/move_gripper/{robot_side}')
         async def move_gripper(robot_side: str, request: MoveGripperRequest)-> Dict[str, str]:
             """
@@ -136,8 +125,7 @@ class FrankaServer:
             if robot_side != "left":
                 logger.info("Only left arm is supported")
             try:
-                self.gripper.goto(width=request.width, speed=request.velocity, 
-                                  force=request.force_limit)
+                self.gripper.goto(width=request.width, speed=request.velocity, force=request.force_limit)
                 logger.info(f"Gripper moving to width {request.width} with velocity {request.velocity} and force limit {request.force_limit}")
             except Exception as e:
                 logger.error(f"Failed to move gripper: {e}")
@@ -152,26 +140,24 @@ class FrankaServer:
             if robot_side != "left":
                 logger.info("Only left arm is supported")
             try:
-                self.gripper.grasp(force=request.force_limit)
-                logger.info(f"Gripper grasping with force {request.force_limit}")
+                self.gripper.grasp(speed=request.velocity, force=request.force_limit)
+                logger.info(f"Gripper grasping with force {request.force_limit} and velocity {request.velocity}")
             except Exception as e:
                 logger.error(f"Failed to move gripper: {e}")
                 raise HTTPException(status_code=500, detail="Failed to move gripper")
-            return {"message": f"Gripper grasping with force {request.force_limit}"}
+            return {"message": f"Gripper grasping with force {request.force_limit} and velocity {request.velocity}"}
 
         @self.app.post('/stop_gripper/{robot_side}')
         async def stop_gripper(robot_side: str)-> Dict[str, str]:
             """
             Stop the gripper's current motion.
+            Polymetis GripperInterface has no stop method, and gripper motion is non-realtime and blocking.
+            So we just log the information here.
             """
             if robot_side != "left":
                 logger.info("Only left arm is supported")
-            try:
-                self.gripper.stop()
-                logger.info("Gripper stopped")
-            except Exception as e:
-                logger.error(f"Failed to stop gripper: {e}")
-                raise HTTPException(status_code=500, detail="Failed to stop gripper")
+            # self.gripper.stop()
+            logger.info("Gripper stopped successfully")
             return {"message": "Gripper stopped"}
 
         @self.app.post('/move_tcp/{robot_side}')
@@ -184,23 +170,20 @@ class FrankaServer:
                 logger.info("Only left arm is supported")
                 
             target_7d_pose = np.array(request.target_tcp) # (x, y, z, qw, qx, qy, qz), in flange coordinate
-            # target_pose = pose_7d_to_pose_6d(target_7d_pose) # (x, y, z, r, p, y)， in flange coordinate
             pos = target_7d_pose[:3]
             quat_wxyz = target_7d_pose[3:]
             quat_xyzw = [quat_wxyz[1], quat_wxyz[2], quat_wxyz[3], quat_wxyz[0]] # wxyz to xyzw
             rotvec = st.Rotation.from_quat(quat_xyzw).as_rotvec()
             target_pose = np.concatenate([pos, rotvec]) # (x, y, z, rx, ry, rz)， in flange coordinate
-
             
             curr_time = time.monotonic()
-            command_duration = 1/90 # 90Hz for high-level control frequency
-            target_time = curr_time + command_duration
+            command_duration = 1 / self.vr_frequency
+            target_time = curr_time + command_duration # target time set at half control cycle time in the future
             self.command_queue.append({
                 'cmd': Command.SCHEDULE_WAYPOINT.value,
                 'target_pose': target_pose,
                 'target_time': target_time
             })
-            # logger.info("New command added into command queue!")
             
             return {"message": "Waypoint added for franka robot"}
 
@@ -216,8 +199,7 @@ class FrankaServer:
                 logger.error(f"Failed to move robot to home position: {e}")
                 raise HTTPException(status_code=500, detail="Failed to move robot to home position")
             return {"message": "Robot moved to home position"}
-        
-        
+          
 
     def get_current_tcp(self):
         """
@@ -235,16 +217,16 @@ class FrankaServer:
         # libfranka Gripper State has no element 'gripper_force'
         # libfranka Robot State has no element 'tcp_velocities'
         robot_state = self.robot.get_robot_state()
-        # gripper_state = self.gripper.get_state()
+        gripper_state = self.gripper.get_state()
         ee_pose = self.get_current_tcp()
         return {
             "leftRobotTCP": ee_pose, # (x, y, z, qw, qx, qy, qz), in flange coordinate 
             "leftRobotTCPWrench": robot_state.motor_torques_external.tolist(), # (fx, fy, fz, mx, my, mz)
-            # "leftGripperState": [gripper_state.width, 0] # (width, force),libfranka Gripper State has no element 'gripper_force'
+            "leftGripperState": [gripper_state.width, 0] # (width, force)
         }
 
     def go_home(self):
-        home_joint_positions = [-0.2, -0.1, 1.5, -2.0, 0.2, 2.5, -0.4]
+        home_joint_positions = [-0.07, -0.96, -0.01, -2.55, -0.09, 2.14, 0.59]
         homing_duration = 8.0
         logger.info(f"Moving Franka robot to home position: {home_joint_positions} with duration {homing_duration}s")
         self.robot.move_to_joint_positions(
@@ -252,13 +234,12 @@ class FrankaServer:
             time_to_go=homing_duration
         )
 
-    # TODO: Check whether the loop can run for 1000Hz ON THE DESKTOP
     def process_commands(self):
         """
         Main loop for processing commands and updating the interpolator.
         """
         if self.pose_interp is None:
-            curr_flange_pose = self.get_ee_pose() # (x, y,z, rx, ry, rz)， in flange coordinate
+            curr_flange_pose = self.get_ee_pose() # (x, y, z, rx, ry, rz)， in flange coordinate
 
             curr_time = time.monotonic()
             self.pose_interp = PoseTrajectoryInterpolator(
@@ -298,7 +279,7 @@ class FrankaServer:
             command_queue: low-frequency moving command from VR
             target_time: timestamp where new target pose should be inserted into interpolator
             curr_time: the time base of interpolator
-            last_waypoint_time: the last target pose in the interpolator
+            last_waypoint_time: last target pose in the interpolator
             '''                    
             try:
                 command = self.command_queue.popleft()
@@ -306,7 +287,11 @@ class FrankaServer:
                     target_pose = command['target_pose']
                     curr_time = t_now + self.control_cycle_time
                     target_time = float(command['target_time'])
-                    # TODO: Determine whether we shoul calculate target time based on the current time here
+
+                    if curr_time >= target_time:
+                        logger.warning(f"curr_time ({curr_time:.6f}) >= target_time ({target_time:.6f}), this target point is aborted.")
+                    if self.last_waypoint_time is not None and self.last_waypoint_time >= curr_time:
+                        logger.warning(f"last_waypoint_time ({self.last_waypoint_time:.6f}) >= curr_time ({curr_time:.6f}), the trajectory may be twisted.")
 
                     self.pose_interp = self.pose_interp.schedule_waypoint(
                         pose=target_pose,
@@ -330,8 +315,7 @@ class FrankaServer:
         return np.concatenate([pos, rot_vec]).tolist()
 
     def run(self):
-        self.go_home()
-        logger.info("Franka moved to home position. Interpolation Controller started, waiting for commands...")
+        logger.info("Interpolation Controller started, waiting for commands...")
         command_thread = threading.Thread(target=self.process_commands, daemon=True)
         try:
             command_thread.start()
@@ -348,8 +332,9 @@ class FrankaServer:
 
 def main():
     parser = argparse.ArgumentParser(description="Franka Server with Polymetis")
-    parser.add_argument("--robot_ip", type=str, default='0.0.0.0', help="IP address of the robot")
-    parser.add_argument("--host_ip", type=str, default="0.0.0.0", help="Host IP for FastAPI server")
+    parser.add_argument("--robot_ip", type=str, default='172.16.1.1', help="IP address of the robot")
+    parser.add_argument("--gripper_ip", type=str, default='172.16.1.1', help="IP address of the gripper")
+    parser.add_argument("--host_ip", type=str, default="localhost", help="Host IP for FastAPI server")
     parser.add_argument("--port", type=int, default=8092, help="Port for FastAPI server")
     args = parser.parse_args()
 

@@ -2,7 +2,7 @@
 Test the interpolation of a robot's trajectory using a command queue.
 Visualize the interpolated TCP trajectory using rerun (only x, y, z).
 Note: This is a test script, not intended for real robot control.
-Note: Rerun depends on python 3.9+, thus 
+Note: Rerun depends on python 3.9+, Create a virtual environment with python 3.9+ 
 '''
 
 import numpy as np
@@ -70,8 +70,6 @@ class FrankaInterpolationController:
         t_start = time.monotonic()
         iter_idx = 0
 
-        # rr.init("franka_interp_test", spawn=True)
-
         logger.info("Start interpolation and visualization. Press Ctrl+C to exit.")
         try:
             while True:
@@ -83,7 +81,6 @@ class FrankaInterpolationController:
                 # Rerun: log the current TCP position as a point
                 # rr.log("tcp_traj", rr.Points3D([pos], colors=[(255,0,0)]))
 
-                # Handle new waypoints
                 try:
                     command = self.command_queue.popleft()
                     if command['cmd'] == Command.SCHEDULE_WAYPOINT.value:
