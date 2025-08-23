@@ -63,8 +63,7 @@ def main(cfg: DictConfig):
     time.sleep(1)
 
     # create teleop server
-    transforms = RealWorldTransforms(option=cfg.task.transforms)
-    # TODO: add single_arm/bimanual option to teleop server config
+    transforms = RealWorldTransforms(option=cfg.task.transforms)    
     teleop_server = TeleopServer(robot_server_ip=cfg.task.robot_server.host_ip,
                                  robot_server_port=cfg.task.robot_server.port,
                                  transforms=transforms,

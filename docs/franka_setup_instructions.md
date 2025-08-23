@@ -1,10 +1,6 @@
-# Franka Teleoperation Instructions
+# Franka Setup Instructions
 
-## Overview
-
-This document provides instructions for setting up and running teleoperation with the Franka Emika Panda robot using our VR teleoperation framework.
-
----
+This document provides instructions for teleoperation and policy rollout with the Franka Emika Panda robot using our VR teleoperation framework.
 
 ## Prerequisites
 
@@ -19,8 +15,6 @@ Before starting, ensure you have completed the following:
     - You can install realtime kernel on your desktop according to the official [libfranka documentation](https://frankaemika.github.io/docs/).  
     -  a NUC is recommended.
 -  Meta Quest 3 VR headset.
-- (Optional) RealSense cameras 
-- (Optional) RealSense cameras
 
 ### Network
 
@@ -31,15 +25,9 @@ Before starting, ensure you have completed the following:
 
 ### Software
 
-#### Quest 3 Setup
-Build and install the TactAR APP on the Quest 3 according to
-the [README in our Unity Repo](https://github.com/xiaoxiaoxh/TactAR_APP).
-> You can also adopt other Teleoperation system with force feedback.
-
 #### Workstation Setup
-1. Follow the [official document](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html) to install ROS2 Humble.(Optional if you only want to teleoperate with franka.)
 
-2. We use **Polymetis** to write policy for Franka teleoperation. Polymetis supports Python3.8. It's recommended to create a Conda environment and directly install Polymetis from Conda.
+1. We use **Polymetis** to write policy for Franka teleoperation. Polymetis supports Python3.8. It's recommended to create a Conda environment and directly install Polymetis from Conda.
 
 ```bash
 conda create -n polymetis python=3.8
@@ -51,7 +39,6 @@ For more information about Polymetis, please refer to the Polymetis [GitHub repo
 
 **Note**: You should install Polymetis on both of your workstation and the desktop with realtime kernel!
  
----
 
 ## Teleoperation Setup
 
@@ -84,38 +71,31 @@ The environment and the task have to be configured first and
 then start service for teleoperating robots.
 
 1. Environment and Task Configuration.
-- **Calibration.**
-Example calibration files are proviced in [data/calibration](data/calibration).
-Each `A_to_B_transform.json` contains the transformation from coordinate system A to coordinate system B. 
-> We use calibration files only for bimanual manipulation. 
-> If you teleoperate on a single arm Franka Panda, you may skip this step.
 - **Environment Configuration.**
-Edit [reactive_diffusion_policy/config/task/real_robot_env.yaml](reactive_diffusion_policy/config/task/real_robot_env.yaml)
+Edit [reactive_diffusion_policy/config/task/real_franka_env.yaml](../reactive_diffusion_policy/config/task/real_franka_env.yaml)
 to configure the environment settings including `host_ip`, `robot_ip`, `vr_server_ip` and `calibration_path`.
 - **Task Configuration.**
 Create task config file which assigns the camera and sensor to use.
-You can take [reactive_diffusion_policy/config/task/real_franka_env.yaml](reactive_diffusion_policy/config/task/real_franka_env.yaml)
+You can take [reactive_diffusion_policy/config/task/real_franka_env.yaml](../reactive_diffusion_policy/config/task/real_franka_env.yaml)
 as an example.
-Refer to [docs/customized_deployment_guide.md](docs/customized_deployment_guide.md) for more details.
+Refer to [docs/customized_deployment_guide.md](../docs/customized_deployment_guide.md) for more details.
+Edit [reactive_diffusion_policy/config/task/real_world_env.yaml](../reactive_diffusion_policy/config/real_world_env.yaml) by replacing the default task with your own task config.(e.g. real_franka_env)
 
 1. Start service for teleoperation
    
 ```bash
 # start teleoperation server
-python teleop.py task=[task_config_file_name]
+python teleop.py
 ```
 
 ### Meta Quest 3
 
 Follow the [user guide in our Unity Repo](https://github.com/xiaoxiaoxh/TactAR_APP/blob/master/Docs/User_Guide.md) to run the TactAR APP.
 
----
-
 ## Additional Notes
 
 - We use the Franka Research 3 with the FrankaHand gripper. Other hardwares should also work in principle. 
 - Theoretically, the closer the control signal frequency sent by the FrankaServer is to 1000Hz, the more controllable the policy will be. If your hardware allows, you may increase the "frequency" parameter in [franka_server.py](rreactive_diffusion_policy/real_world/robot/franka_server.py).
   
----
 
 For troubleshooting and advanced usage, please refer to the full documentation or contact the maintainers.

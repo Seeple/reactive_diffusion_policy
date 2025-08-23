@@ -16,6 +16,7 @@ publisher:
     vr_server_ip: *vr_server_ip
     vr_server_tcp_port: 10001
     vr_server_force_port: 10005
+    bimanual_teleop: *bimanual_teleop
 teleop_server:
   host_ip: "192.168.110.111"
   port: 8092
@@ -27,7 +28,7 @@ teleop_server:
   gripper_velocity: 0.1 # 0.1 for FrankaHand
   gripper_control_time_interval: 30  # 30 for FrankaHand
   gripper_control_width_precision: 0.01  # 0.01 for FrankaHand
-  bimanual_teleop: False
+  bimanual_teleop: &bimanual_teleop False
 device_mapping_server:
   host_ip: '127.0.0.1'
   port: 8062
