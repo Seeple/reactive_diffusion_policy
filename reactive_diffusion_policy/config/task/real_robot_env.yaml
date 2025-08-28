@@ -4,7 +4,7 @@ robot_server:
   port: 8092
   left_robot_ip: "192.168.2.110"
   right_robot_ip: "192.168.2.111"
-  bimanual_teleop: *bimanual_teleop
+  bimanual_teleop: &bimanual_teleop True
 publisher:
   vr_server_ip: &vr_server_ip '192.168.2.205'
   # vr_server_ip: &vr_server_ip '192.168.2.203'
@@ -27,7 +27,7 @@ teleop_server:
   grasp_force: 7.0
   gripper_control_time_interval: 30  # 30 for Flexiv Gripper, 20 for PGC-50 gripper
   gripper_control_width_precision: 0.01  # 0.01 for PGC-50 gripper, 0.01 for Flexiv Grav Gripper
-  bimanual_teleop: &bimanual_teleop True
+  bimanual_teleop: *bimanual_teleop
 device_mapping_server:
   host_ip: '127.0.0.1'
   port: 8062
