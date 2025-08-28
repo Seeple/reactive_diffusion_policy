@@ -42,7 +42,8 @@ class FrankaServer:
                  Kx_scale=1.0,
                  Kxd_scale=1.0,
                  vr_frequency=60,
-                 frequency=300):
+                 frequency=300,
+                 bimanual_teleop=False):
         """
         robot_ip: ip address of Desktop directly connected to Franka Emika
         gripper_ip: ip address of Desktop directly connected to Franka Emika
@@ -61,6 +62,7 @@ class FrankaServer:
         self.vr_frequency = vr_frequency
         self.control_frequency = frequency
         self.control_cycle_time = 1.0 / self.control_frequency
+        self.bimanual_teleop = bimanual_teleop
 
         # Initialize the robot and gripper interfaces
         self.robot = RobotInterface(ip_address=self.robot_ip, port=self.robot_port)

@@ -85,7 +85,7 @@ Edit [reactive_diffusion_policy/config/task/real_world_env.yaml](../reactive_dif
    
 ```bash
 # start teleoperation server
-python teleop.py
+python teleop.py task=[task_config_file_name]
 ```
 
 ### Meta Quest 3

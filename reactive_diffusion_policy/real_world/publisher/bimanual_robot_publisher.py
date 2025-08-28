@@ -80,9 +80,9 @@ class BimanualRobotPublisher(Node):
 
         robot_states_in_unity_dict = BimanualRobotStates(
             leftGripperState=robot_states.leftGripperState,
-            rightGripperState=robot_states.rightGripperState if self.bimanual_teleop else [0.0, 0.0],
+            rightGripperState=robot_states.rightGripperState if self.bimanual_teleop else [0.0] * 2,
             leftRobotTCP=left_tcp_pose_7d_in_unity,
-            rightRobotTCP=right_tcp_pose_7d_in_unity if self.bimanual_teleop else [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            rightRobotTCP=right_tcp_pose_7d_in_unity if self.bimanual_teleop else [0.0] * 7
         ).model_dump()
         if self.debug:
             with open(f'robot_states.json', 'w') as json_file:

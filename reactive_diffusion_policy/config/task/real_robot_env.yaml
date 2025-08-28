@@ -4,6 +4,7 @@ robot_server:
   port: 8092
   left_robot_ip: "192.168.2.110"
   right_robot_ip: "192.168.2.111"
+  bimanual_teleop: *bimanual_teleop
 publisher:
   vr_server_ip: &vr_server_ip '192.168.2.205'
   # vr_server_ip: &vr_server_ip '192.168.2.203'
