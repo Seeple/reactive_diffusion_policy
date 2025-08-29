@@ -51,22 +51,10 @@ class PoseTrajectoryInterpolator:
             pos = poses[:,:3]
             rot = st.Rotation.from_rotvec(poses[:,3:])
 
-            # origianl linear interpolator
+            # Linear interpolator
             self.pos_interp = si.interp1d(times, pos, 
                 axis=0, assume_sorted=True)
             self.rot_interp = st.Slerp(times, rot)
-            
-            # # Min-Jerk interpolation
-            # # Min-jerk interpolation requires normalizing the time sequence
-            # self.start_time = times[0]
-            # self.end_time = times[-1]
-            # normalized_times = (times - self.start_time) / (self.end_time - self.start_time)
-
-            # # Min-jerk times: the velocity and accelaration are zero at the start and end of the trajectory
-            # transformed_times = 10 * normalized_times**3 - 15 * normalized_times**4 + 6 * normalized_times**5
-
-            # self.pos_interp = si.interp1d(transformed_times, pos, axis=0, assume_sorted=True)
-            # self.rot_interp = st.Slerp(transformed_times, rot)
             
     def _min_jerk_time(self, t: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """
@@ -230,7 +218,7 @@ class PoseTrajectoryInterpolator:
         if self.single_step:
             pose[:] = self._poses[0]
         else:
-            # original linear interpolation
+            # Linear interpolation
             start_time = self.times[0]
             end_time = self.times[-1]
             t = np.clip(t, start_time, end_time)
@@ -238,13 +226,6 @@ class PoseTrajectoryInterpolator:
             pose = np.zeros((len(t), 6))
             pose[:,:3] = self.pos_interp(t)
             pose[:,3:] = self.rot_interp(t).as_rotvec()
-            
-            # # Transform time using Min-Jerk
-            # transformed_t = self._min_jerk_time(t)
-
-            # pose = np.zeros((len(transformed_t), 6))()
-            # pose[:, :3] = self.pos_interp(transformed_t)
-            # pose[:, 3:] = self.rot_interp(transformed_t).as_rotvec()
 
         if is_single:
             pose = pose[0]
