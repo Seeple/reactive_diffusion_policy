@@ -21,7 +21,7 @@ past_action_visible: False
 keypoint_visible_rate: 1.0
 
 at_load_dir: null
-use_latent_action_before_vq: True
+use_latent_action_before_vq: False
 obs_as_global_cond: True
 
 policy:

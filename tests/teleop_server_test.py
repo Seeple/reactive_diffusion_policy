@@ -1,5 +1,6 @@
 '''
-A simplified teleop server for testing purposes.
+A simplified teleop server, used for testing connection between teleop server and franka server.
+This script sends commands to move the robot arm along the x-axis.
 '''
 
 import threading
@@ -9,13 +10,14 @@ import requests
 import numpy as np
 from loguru import logger
 
+from reactive_diffusion_policy.common.precise_sleep import precise_wait
 class TeleopServerTest:
     def __init__(self, 
                  robot_server_ip="0.0.0.0", 
                  robot_server_port=8092, 
-                 step=1/3600, 
-                 num_steps=1800, 
-                 interval=1/90):
+                 step=1/2400, 
+                 num_steps=600, 
+                 interval=1/60):
         '''
         robot_server_ip: The IP address of the FASTAPI server running the teleoperation API.
         robot_server_port: The port number of the FASTAPI server running the teleoperation API.
@@ -39,7 +41,6 @@ class TeleopServerTest:
         else:
             if 'move' in endpoint:
                 try:
-                    # Ignore timeout and connection errors for testing purposes
                     response = self.session.post(url, json=data, timeout=0.001)
                     logger.info(f"Request to {url} succeeded with data: {data}")
                 except requests.exceptions.ReadTimeout as e:
@@ -59,26 +60,32 @@ class TeleopServerTest:
         '''
         Process the command to move the robot arm along the x-axis.
         '''
-        logger.info("Waiting for the robot to move to home position...")
-        time.sleep(10) 
-        logger.info("Home position reached. Starting test...")
+        logger.info("Waiting for the franka server to initialize...")
+        time.sleep(2) 
+        logger.info("Franka server initialized. Starting to move along x axis...")
 
-        logger.info("Start moving along x axis...")
-        for _ in range(self.num_steps):
+        init_state = self.send_command('/get_current_tcp/left')  # (x, y, z, qw, qx, qy, qz), in flange coordinate
+        init_tcp = np.array(init_state)
+        if init_state is None:
+            logger.error("Failed to get initial TCP, aborting test.")
+            return
+        
+        t_start = time.monotonic()
+        iter_idx = 0
+        
+        for i in range(self.num_steps):
             if self._stop_flag:
                 break
 
-            tcp_state = self.send_command('/get_current_tcp/left') # (x, y, z, qw, qx, qy, qz), in flange coordinate
-            logger.info(f"Current TCP: {tcp_state}")
-            if tcp_state is None:
-                logger.error("Failed to get current TCP, skipping this step.")
-                time.sleep(self.control_cycle_time)
-                continue
-            tcp = np.array(tcp_state)
-            tcp[0] += self.step 
-            self.send_command('/move_tcp/left', {'target_tcp': tcp.tolist()})# (x, y, z, qw, qx, qy, qz), in flange coordinate
-            logger.info(f"Step {_+1}: Move to {tcp[:3]}")
-            time.sleep(self.control_cycle_time)
+            target_tcp = init_tcp.copy()
+            target_tcp[0] += (i + 1) * self.step
+            self.send_command('/move_tcp/left', {'target_tcp': target_tcp.tolist()})
+            logger.info(f"Step {i+1}: Move to {target_tcp[:3]}")
+
+            t_wait_util = t_start + (iter_idx + 1) * self.control_cycle_time
+            precise_wait(t_wait_util, time_func=time.monotonic)
+            iter_idx += 1
+
 
         logger.info("Test finished. Terminating policy...")
 
